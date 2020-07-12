@@ -114,7 +114,8 @@ library(scater)
 
 # calculate QCs (set a positive control gene to "ERCC")
 GCmatrix <- perCellQCMetrics(sce, 
-                             subsets = list(ERCC = str_detect(rowData(sce)$gene_names, "Ercc")))
+                             subsets = list(ERCC = str_detect(rowData(sce)$gene_names, 
+                                                              "Ercc")))
 
 colData(sce) <- GCmatrix  
 
@@ -380,10 +381,18 @@ DimPlot(object = seuset, reduction = "pca")
 DimPlot(object = seuset, reduction = "tsne")
 
 # A single gene in  dimensional reduction plot 
-FeaturePlot(seuset, features = "Eef1a1")
+# CD48: MPP marker
+# CD150 (Slamf1): LT-HSC marker 
+FeaturePlot(seuset, features = "Cd48")
+FeaturePlot(seuset, features = "Slamf1")
+FeaturePlot(seuset, features = "Flt3")
+FeaturePlot(seuset, features = "Cd34")
 
 # Comparing specific genes in single cells 
-FeatureScatter(object = seuset, feature1 = "Eef1a1", feature2 = "Rabac1")
+
+FeatureScatter(object = seuset, feature1 = "Eef1a1", feature2 = "Cd48")
+FeatureScatter(object = seuset, feature1 = "Eef1a1", feature2 = "Slamf1")
+FeatureScatter(object = seuset, feature1 = "Eef1a1", feature2 = "Slamf1")
 
 
 # Comparing cells across genes 
@@ -394,21 +403,19 @@ CellScatter(object = seuset, cell1 = "old_DBA_STHSC_30", cell2 = "old_DBA_MPP_14
 VariableFeaturePlot(seuset)
 
 # Gene expression plot by cluster
-VlnPlot(seuset, features = c("Eef1a1", "Rabac1"))
+VlnPlot(seuset, features = c("Cd48", "Slamf1", "Flt3", "Cd34"))
 
 # Gene expression plot by lineage
-VlnPlot(seuset, features = c("Eef1a1", "Rabac1"), split.by = "lineage")
+VlnPlot(seuset, features = c("Cd48", "Slamf1", "Flt3", "Cd34"), split.by = "lineage")
+VlnPlot(seuset, features = c("Cd48", "Slamf1", "Flt3", "Cd34"), split.by = "age")
 
 # Gene expression plot by age
-VlnPlot(seuset, 
-        features = c("Eef1a1", "Rabac1"), 
-        split.by = "age")
 DotPlot(object = seuset, 
-        features = c("Eef1a1", "Rabac1"), 
+        features = c("Cd48", "Slamf1", "Flt3", "Cd34"), 
         split.by = "age")
 
 
-RidgePlot(seuset, features = c("Eef1a1", "Rabac1"))
+RidgePlot(seuset, features = c("Cd48", "Slamf1", "Flt3", "Cd34"))
 
 
 
@@ -420,8 +427,7 @@ DimHeatmap(seuset, reduction = "pca", cells = 200)
 
 # Distribution of gene across the low dimensions 
 FeaturePlot(object = seuset, 
-               features = c("Eef1a1", 
-                            "Rabac1"),
+               features = c("Flt3", "Cd48"),
                blend = TRUE)
 
 
@@ -429,6 +435,52 @@ clusters <- seuset@active.ident
 age <- seuset@meta.data[, "age"]
 lineage <- seuset@meta.data[, "lineage"]
 
-table(clusters, age)
-table(clusters, lineage)
-table(age, lineage)
+cluster_age_ratio <- as.data.table(table(clusters, age))[
+        , Proportion := N/sum(N) * 100, by = "age"][
+                , Proportion := round(Proportion, digits = 2)][]
+
+
+cluster_lineage_ratio <- as.data.table(table(clusters, lineage))[
+        , Proportion := N/sum(N) * 100, by = "lineage"][
+                , Proportion := round(Proportion, digits = 2)][]
+
+age_lineage_ratio <- as.data.table(table(age, lineage))[
+        , Proportion := N/sum(N) * 100, by = "age"][
+                , Proportion := round(Proportion, digits = 2)][
+                        , .SD, by = "age"][]
+
+cluster_celltype <- as.data.table(seuset@meta.data[, c("age", 
+                                                       "lineage", 
+                                                       "seurat_clusters")]) %>%
+        unite(cell_type, age, lineage) 
+
+cluster_celltype_dt <- round(100* prop.table(table(cluster_celltype$cell_type, 
+                                                   cluster_celltype$seurat_clusters), 
+                                             2), 
+                             digits = 2) %>%
+        as.data.table() %>%
+        mutate(V1 = factor(V1, levels = c("young_LTHSC",
+                                          "old_LTHSC",
+                                          "young_STHSC",
+                                          "old_STHSC",
+                                          "young_MPP",
+                                          "old_MPP")),
+               V2 = factor(V2))
+
+names(cluster_celltype_dt) <- c("Cell_Type", 
+                                "Clusters",
+                                "Proportion")
+        
+                            
+ggplot(cluster_celltype_dt, 
+       aes(x = Clusters,
+           y = Cell_Type,
+           fill = Proportion)) + 
+        geom_tile() +
+        theme_bw() + 
+        ylab("Cell Type") +
+        ggtitle("Population Proportion (%) of Each Cell Type per cluster")
+
+
+
+#################################### DE analysis ####################################
