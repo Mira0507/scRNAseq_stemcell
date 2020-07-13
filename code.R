@@ -133,8 +133,9 @@ GCByGroup <- ggplot(cDataFrame, aes(x = total,
         geom_point(alpha = 0.5, size = 2) + 
         theme_bw() +
         xlab("Total Counts per Cell") +
-        ylab("ERCC Counts per Cell") +
-        ggtitle("ERCC Counts over Total Counts by Age and Lineage")
+        ylab("ERCC Counts per Cell (Log)") +
+        ggtitle("ERCC Counts over Total Counts by Age and Lineage") +
+        scale_y_log10()
 
 
 
