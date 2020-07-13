@@ -356,29 +356,42 @@ colData(sce) <- cbind(colData(sce), CellType[, c("age", "lineage")])
 seuset <- CreateSeuratObject(assay(sce),
                              meta.data = as.data.frame(colData(sce)))
 
+seuset_sub <- CreateSeuratObject(assay(sub_sce),
+                                 meta.data = as.data.frame(colData(sub_sce)))
+
 # NormalizeData: counts are divided by total counts per cell, multiplied by the scale factor,
 # and natural-log transformed using log1p 
 seuset <- NormalizeData(seuset,
                         normalization.method = "LogNormalize")
-
+seuset_sub <- NormalizeData(seuset_sub,
+                            normalization.method = "LogNormalize")
+        
 seuset <- FindVariableFeatures(seuset)
+seuset_sub <- FindVariableFeatures(seuset_sub)
 
 seuset <- ScaleData(seuset)
-
-
+seuset_sub <- ScaleData(seuset_sub)
 
 # PCA, tSNE, and Clustering
 seuset <- RunPCA(seuset)
+seuset_sub <- RunPCA(seuset_sub)
 
 seuset <- FindNeighbors(seuset)
+seuset_sub <- FindNeighbors(seuset_sub)
 
 seuset <- FindClusters(seuset)
+seuset_sub <- FindClusters(seuset_sub)
+
 
 seuset <- RunTSNE(seuset)
+seuset_sub <- RunTSNE(seuset_sub)
 
 # PCA and tSNE plots 
 DimPlot(object = seuset, reduction = "pca")
 DimPlot(object = seuset, reduction = "tsne")
+DimPlot(object = seuset_sub, reduction = "pca")
+DimPlot(object = seuset_sub, reduction = "tsne")
+
 
 # A single gene in  dimensional reduction plot 
 # CD48: MPP marker
@@ -388,11 +401,15 @@ FeaturePlot(seuset, features = "Slamf1")
 FeaturePlot(seuset, features = "Flt3")
 FeaturePlot(seuset, features = "Cd34")
 
+FeaturePlot(seuset_sub, features = "tSNE_1")
+
+
 # Comparing specific genes in single cells 
 
 FeatureScatter(object = seuset, feature1 = "Eef1a1", feature2 = "Cd48")
 FeatureScatter(object = seuset, feature1 = "Eef1a1", feature2 = "Slamf1")
 FeatureScatter(object = seuset, feature1 = "Eef1a1", feature2 = "Slamf1")
+FeatureScatter(object = seuset, feature1 = "PC_1", feature2 = "Slamf1")
 
 
 # Comparing cells across genes 
@@ -401,13 +418,23 @@ CellScatter(object = seuset, cell1 = "old_DBA_STHSC_30", cell2 = "old_DBA_MPP_14
 # The number of significant vs insignificant variables (genes)
 # Black = insignificant, Red = significant 
 VariableFeaturePlot(seuset)
+VariableFeaturePlot(seuset_sub)
 
 # Gene expression plot by cluster
 VlnPlot(seuset, features = c("Cd48", "Slamf1", "Flt3", "Cd34"))
+VlnPlot(seuset, features = "PC_1")
+VlnPlot(seuset, features = "tSNE_1")
+VlnPlot(seuset_sub, features = "PC_1")
+VlnPlot(seuset_sub, features = "tSNE_1")
+
 
 # Gene expression plot by lineage
 VlnPlot(seuset, features = c("Cd48", "Slamf1", "Flt3", "Cd34"), split.by = "lineage")
 VlnPlot(seuset, features = c("Cd48", "Slamf1", "Flt3", "Cd34"), split.by = "age")
+VlnPlot(seuset, features = "tSNE_1", split.by = "lineage")
+VlnPlot(seuset, features = "tSNE_1", split.by = "age")
+VlnPlot(seuset, features = "PC_1", split.by = "lineage")
+VlnPlot(seuset, features = "PC_1", split.by = "age")
 
 # Gene expression plot by age
 DotPlot(object = seuset, 
@@ -422,7 +449,16 @@ RidgePlot(seuset, features = c("Cd48", "Slamf1", "Flt3", "Cd34"))
 
 # Heatmaps 
 DoHeatmap(seuset)
-DimHeatmap(seuset, reduction = "pca", cells = 200)
+heatmap_mostchanged100 <- DoHeatmap(seuset_sub) + 
+        ggtitle("100 Most Changed Genes") + 
+        xlab("Cluster") + 
+        ylab("Gene") + 
+        theme(axis.text.y = element_text(size = 5),
+              axis.text.x = element_blank(),
+              axis.title = element_text(size = 15))
+
+DimHeatmap(seuset, reduction = "pca", cells = 504)
+DimHeatmap(seuset_sub, reduction = "pca", cells = 504)
 
 
 # Distribution of gene across the low dimensions 
@@ -481,6 +517,18 @@ ggplot(cluster_celltype_dt,
         ylab("Cell Type") +
         ggtitle("Population Proportion (%) of Each Cell Type per cluster")
 
+library(pheatmap)
+
+clusters_sub <- seuset_sub@active.ident
+colData(sub_sce) <- cbind(colData(sub_sce), clusters_sub)
+cmat <- logcounts(sub_sce)
+meta <- as.data.frame(colData(sub_sce)[, c("age", "lineage", "clusters_sub")]) 
+names(meta) <- c("Age", "Cell_Type", "Cluster")
 
 
-#################################### DE analysis ####################################
+
+pheatmap(cmat, 
+         annotation = meta[, 1:2],
+         show_rownames = F, 
+         show_colnames = F,
+         main = "Gene Expression Profile across Cells")
