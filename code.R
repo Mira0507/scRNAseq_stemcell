@@ -144,6 +144,19 @@ GCByGroup <- ggplot(cDataFrame, aes(x = total,
 
 ################### Gene QC: filter out genes 
 
+counts_genes <- ggplot(as.data.frame(counts(sce)), 
+                       aes(x = rowSums(counts(sce)),
+                           fill = "red")) + 
+        geom_density(alpha = 0.5) +
+        theme_bw() + 
+        scale_x_log10() + 
+        theme(legend.position = "none") + 
+        xlab("Total Counts per Gene (log)") + 
+        ylab("Density") + 
+        ggtitle("Distribution of Counts per Gene per Cell") + 
+        geom_vline(xintercept = 1, color = "blue", size = 1)
+
+
 # filter genes with at least a count of 1 in at least 2 cells
 filter_genes <- apply(counts(sce), 
                       1, 
@@ -177,7 +190,8 @@ SizeFactorDist <- ggplot(data.frame(sf = sizeFactors(sce)),
 assays(sce)
 
 # normalize sce
-norm_sce <- logNormCounts(sce)
+norm_sce <- logNormCounts(sce,
+                          size_factors = sizeFactors(sce))
 
 # view the assays for normalized_sce
 assays(norm_sce)
@@ -237,10 +251,20 @@ DimRedTab <- cbind(as.data.table(reducedDim(norm_sce, "PCA")[, 1:2]),
 
 names(DimRedTab) <- c("PC1", "PC2", "tSNE_x", "tSNE_y")
 DimRedTab <- DimRedTab[, c("Age", 
-                           "Lineage") := 
-                               .(colData(norm_sce)$age, 
-                                 colData(norm_sce)$lineage)]
+                           "Lineage") 
+                       := .(colData(norm_sce)$age, 
+                            colData(norm_sce)$lineage)][,
+                                                        c("Age", 
+                                                          "Lineage") 
+                                                        := .(factor(Age, 
+                                                                    c("young", 
+                                                                      "old")),
+                                                             factor(Lineage, 
+                                                                    c("LTHSC",
+                                                                      "STHSC",
+                                                                      "MPP")))]
 
+                               
 DimRedPlot_fn <- function(data, 
                           xcol, 
                           ycol, 
@@ -268,7 +292,7 @@ Total_PCA_plot <- DimRedPlot_fn(DimRedTab,
                                 DimRedTab$PC2,
                                 DimRedTab$Lineage,
                                 DimRedTab$Age,
-                                "PCA of Total Cell Population",
+                                "PCA of Total Cell Population (All Genes)",
                                 "PC1",
                                 "PC2")
 
@@ -278,7 +302,7 @@ Total_tSNE_plot <- DimRedPlot_fn(DimRedTab,
                                  DimRedTab$tSNE_y,
                                  DimRedTab$Lineage,
                                  DimRedTab$Age,
-                                 "t-SNE of Total Cell Population", 
+                                 "t-SNE of Total Cell Population (All Genes)", 
                                  "tSNE_x",
                                  "tSNE_y")
 
@@ -320,16 +344,28 @@ sub_DimRedTab <- cbind(as.data.table(reducedDim(sub_sce, "PCA")[, 1:2]),
 
 names(sub_DimRedTab) <- c("PC1", "PC2", "tSNE_x", "tSNE_y")
 sub_DimRedTab <- sub_DimRedTab[, c("Age", 
-                           "Lineage") := 
-                               .(colData(sub_sce)$age, 
-                                 colData(sub_sce)$lineage)]
+                                   "Lineage") 
+                               :=  .(colData(sub_sce)$age, 
+                                     colData(sub_sce)$lineage)][
+                                             ,
+                                             c("Age", 
+                                               "Lineage") 
+                                             := .(factor(Age, 
+                                                         c("young", 
+                                                           "old")),
+                                                  factor(Lineage, 
+                                                         c("LTHSC",
+                                                           "STHSC",
+                                                           "MPP")))]
+
+
 
 Total_SubPCA_plot <- DimRedPlot_fn(sub_DimRedTab,
                                    sub_DimRedTab$PC1,
                                    sub_DimRedTab$PC2,
                                    sub_DimRedTab$Lineage,
                                    sub_DimRedTab$Age,
-                                   "PCA of Total Cell Population",
+                                   "PCA of Total Cell Population (100 Genes)",
                                    "PC1",
                                    "PC2")
 
@@ -340,10 +376,14 @@ Total_SubtSNE_plot <- DimRedPlot_fn(sub_DimRedTab,
                                     sub_DimRedTab$tSNE_y,
                                     sub_DimRedTab$Lineage,
                                     sub_DimRedTab$Age,
-                                    "t-SNE of Total Cell Population", 
+                                    "t-SNE of Total Cell Population (100 Genes)", 
                                     "tSNE_x",
                                     "tSNE_y")
 
+library(gridExtra)
+grid.arrange(Total_PCA_plot, Total_tSNE_plot, ncol = 1)
+grid.arrange(Total_PCA_plot, Total_SubPCA_plot, ncol = 1)
+grid.arrange(Total_tSNE_plot, Total_SubtSNE_plot, ncol = 1)
 
 #################################### Clustering ####################################
 
@@ -384,16 +424,34 @@ seuset <- FindClusters(seuset)
 seuset_sub <- FindClusters(seuset_sub)
 
 
-seuset <- RunTSNE(seuset)
-seuset_sub <- RunTSNE(seuset_sub)
+seuset <- RunTSNE(seuset, perplexity = 50)
+seuset_sub <- RunTSNE(seuset_sub, perplexity = 50)
 
 # PCA and tSNE plots 
-DimPlot(object = seuset, reduction = "pca")
-DimPlot(object = seuset, reduction = "tsne")
-DimPlot(object = seuset_sub, reduction = "pca")
-DimPlot(object = seuset_sub, reduction = "tsne")
+Dimplot_fn <- function(sr, method, title) { 
+        DimPlot(object = sr, 
+                reduction = method) + 
+                ggtitle(title) }
 
+seurat_pca_all <- Dimplot_fn(seuset, 
+                             "pca", 
+                             "Seurat PCA with Clustering (All Genes)")
+seurat_tsne_all <- Dimplot_fn(seuset, 
+                              "tsne", 
+                              "Seurat t-SNE with Clustering (All Genes)")
+seurat_pca_sub <- Dimplot_fn(seuset_sub, 
+                             "pca", 
+                             "Seurat PCA with Clustering (100 Genes)")
 
+seurat_tsne_sub <- Dimplot_fn(seuset_sub, 
+                              "tsne", 
+                              "Seurat t-SNE with Clustering (100 Genes)")
+
+grid.arrange(seurat_pca_all,
+             seurat_pca_sub, ncol = 1)
+
+grid.arrange(seurat_tsne_all,
+             seurat_tsne_sub, ncol = 1)
 # A single gene in  dimensional reduction plot 
 # CD48: MPP marker
 # CD150 (Slamf1): LT-HSC marker 
@@ -449,7 +507,7 @@ RidgePlot(seuset, features = c("Cd48", "Slamf1", "Flt3", "Cd34"))
 
 
 # Heatmaps 
-DoHeatmap(seuset)
+
 heatmap_mostchanged100 <- DoHeatmap(seuset_sub) + 
         ggtitle("100 Most Changed Genes") + 
         xlab("Cluster") + 
@@ -458,8 +516,18 @@ heatmap_mostchanged100 <- DoHeatmap(seuset_sub) +
               axis.text.x = element_blank(),
               axis.title = element_text(size = 15))
 
+        
+heatmap_total <- DoHeatmap(seuset) + 
+        ggtitle("Total Gene Expression") + 
+        xlab("Cluster") + 
+        ylab("Gene") + 
+        theme(axis.text.y = element_text(size = 5),
+              axis.text.x = element_blank(),
+              axis.title = element_text(size = 15))
+
 DimHeatmap(seuset, reduction = "pca", cells = 504)
 DimHeatmap(seuset_sub, reduction = "pca", cells = 504)
+
 
 
 # Distribution of gene across the low dimensions 
@@ -486,6 +554,9 @@ age_lineage_ratio <- as.data.table(table(age, lineage))[
                 , Proportion := round(Proportion, digits = 2)][
                         , .SD, by = "age"][]
 
+
+
+        
 cluster_celltype <- as.data.table(seuset@meta.data[, c("age", 
                                                        "lineage", 
                                                        "seurat_clusters")]) %>%
@@ -509,27 +580,29 @@ names(cluster_celltype_dt) <- c("Cell_Type",
                                 "Proportion")
         
                             
-ggplot(cluster_celltype_dt, 
-       aes(x = Clusters,
-           y = Cell_Type,
-           fill = Proportion)) + 
+cluster_vs_celltype_plot <- 
+        ggplot(cluster_celltype_dt, 
+               aes(x = Clusters,
+                   y = Cell_Type,
+                   fill = Proportion)) + 
         geom_tile() +
         theme_bw() + 
         ylab("Cell Type") +
-        ggtitle("Population Proportion (%) of Each Cell Type per cluster")
+        ggtitle("Population Proportion (%) of Each Cell Type per Cluster")
 
 library(pheatmap)
 
-clusters_sub <- seuset_sub@active.ident
-colData(sub_sce) <- cbind(colData(sub_sce), clusters_sub)
-cmat <- logcounts(sub_sce)
-meta <- as.data.frame(colData(sub_sce)[, c("age", "lineage", "clusters_sub")]) 
-names(meta) <- c("Age", "Cell_Type", "Cluster")
+
+colData(norm_sce) <- cbind(colData(norm_sce), clusters)
+meta <- data.frame(clusters = seuset@active.ident,
+                   empty_var = "none")
+cmat <- logcounts(norm_sce)
 
 
 
-pheatmap(cmat, 
-         annotation = meta[, 1:2],
-         show_rownames = F, 
-         show_colnames = F,
-         main = "Gene Expression Profile across Cells")
+gene100HeatMap <- pheatmap(cmat[rownames(sub_sce), ], 
+                           annotation = meta,
+                           show_rownames = F, 
+                           show_colnames = F,
+                           main = "Expression of 100 Genes across Clusters")
+
