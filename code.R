@@ -590,6 +590,8 @@ cluster_vs_celltype_plot <-
         ylab("Cell Type") +
         ggtitle("Population Proportion (%) of Each Cell Type per Cluster")
 
+#################################### Gene expression heatmap of 100 genes ####################################
+
 library(pheatmap)
 
 
